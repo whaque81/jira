@@ -26,18 +26,9 @@ public class Jira {
 	static String user=ReadProperty.getJiraProperty("Jira.credentials.user");
 	static String password=ReadProperty.getJiraProperty("Jira.credentials.password");
 	static String url=ReadProperty.getJiraProperty("Jira.instance.url");
+	static String project=ReadProperty.getJiraProperty("Jira.project");
+	
 	Logger log = LoggerFactory.getLogger(Jira.class);
-
-	public static void main(String args[]) throws Exception{
-		//authentication();
-		//updateResult();
-		//getTransitionID();
-		//addAttachment();
-		Jira jira = new Jira();
-		jira.getAuthorization();
-	}
-
-
 
 	public void getAuthorization() throws Exception{
 		String request = "{\"username\": \""+user+"\",\"password\": \""+password+"\"}";
@@ -75,7 +66,7 @@ public class Jira {
 			log.error("Failed to open https connection: "+e);
 		}
 		con.setRequestProperty("User-Agent","Mozilla/5.0 ( compatible ) ");
-		con.setRequestProperty("Authorization", "Basic " + getAuthentication("whaque","!!Nov1981"));
+		con.setRequestProperty("Authorization", "Basic " + getAuthentication(user,password));
 		con.setConnectTimeout(15000);
 		con.setDoOutput(true);
 		con.setDoInput(true);
@@ -110,6 +101,89 @@ public class Jira {
 			log.info("Status of the issue "+issueIDorKey+" was changed to "+status+" successfully");
 		}
 		con.disconnect();
+	}
+	
+	public  void addComment(String issueIDorKey, String comment) throws Exception{
+		String exception="";
+		String request = "{\"body\": \""+comment+"\"}"; 
+		URL Url = new URL(url+"/rest/api/2/issue/"+issueIDorKey+"/comment"); 
+		HttpsURLConnection con = openConnection(Url);
+		con.setRequestProperty("Content-Type", "application/json");
+		con.setRequestProperty("Accept", "application/json");
+		con.setRequestMethod("POST");
+		con.connect();
+		try{
+			OutputStreamWriter writer = new OutputStreamWriter(con.getOutputStream());
+			writer.write(request);
+			writer.close();
+			writer=null;} 
+		catch(Exception e){
+			exception=e.getMessage();
+			log.info("Response code returned="+con.getResponseCode());
+			log.error("Failed to add new comment: "+exception);
+		}
+		if(exception.isEmpty()){
+			log.info("Comment - '"+comment+"' added to the issue "+issueIDorKey+" successfully");
+		}
+		con.disconnect();
+	}
+	
+	public  void getIssueDetail(String issueIDorKey, String issueQueryParameter) throws Exception{
+		String exception="";
+		String responseHeaders="";
+		String line="";
+		String result="";
+		URL Url = new URL(url+"/rest/api/2/issue/"+issueIDorKey); 
+		HttpsURLConnection con = openConnection(Url);
+		con.setRequestProperty("Content-Type", "application/json");
+		con.setRequestProperty("Accept", "application/json");
+		con.setRequestMethod("GET");
+		con.connect();
+		try{
+			con.connect();
+			BufferedReader rd = new BufferedReader (new InputStreamReader(con.getInputStream()));
+			while ((line = rd.readLine()) != null)
+				responseHeaders = responseHeaders + line;
+			JSONObject jsonobject = new JSONObject(responseHeaders);
+			result = jsonobject.getJSONObject("fields").getJSONObject(issueQueryParameter.toLowerCase()).getString("name");
+		} catch(Exception e){
+			exception=e.getMessage();
+			log.info("Response code returned="+con.getResponseCode());
+			log.error("Failed to retrieve "+issueQueryParameter+" detail:" +exception);
+		}
+		if(exception.isEmpty()){
+			log.info("Issue - "+issueIDorKey+" "+issueQueryParameter+"="+result);
+		}
+		con.disconnect();
+	}
+	
+	public  String getIssues(String jql) throws Exception{
+		String exception="";
+		String responseHeaders="";
+		String line="";
+	
+		URL Url = new URL(url+"/rest/api/2/search?jql="+jql); 
+		HttpsURLConnection con = openConnection(Url);
+		con.setRequestProperty("Content-Type", "application/json");
+		con.setRequestProperty("Accept", "application/json");
+		con.setRequestMethod("GET");
+		con.connect();
+		try{
+			con.connect();
+			BufferedReader rd = new BufferedReader (new InputStreamReader(con.getInputStream()));
+			while ((line = rd.readLine()) != null)
+				responseHeaders = responseHeaders + line;
+		} catch(Exception e){
+			exception=e.getMessage();
+			log.info("Response code returned="+con.getResponseCode());
+			log.error("Failed to execute JQL:" +exception);
+		}
+		if(exception.isEmpty()){
+			log.info("JQL - "+jql+" executed successfully");
+		}
+		con.disconnect();
+		
+		return responseHeaders;
 	} 
 
 	public static String getAuthentication(String username, String password) {
@@ -155,7 +229,7 @@ public class Jira {
 		File file=new File(fullFileName);
 		byte[] bFile = Files.readAllBytes(file.toPath());
 		String contentDisposition = "Content-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"";
-		String contentType = "Content-Type: application/octet-stream";	    	
+		String contentType = "Content-Type: application/octet-stream";
 		String BOUNDARY = "*****";
 		String CRLF = "\r\n";		
 		StringBuffer requestBody = new StringBuffer();
